@@ -19,6 +19,17 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
 # =========================================================
+# PAGE CONFIG
+# =========================================================
+
+st.set_page_config(
+    page_title="ARMY Space | BTS: The Journey",
+    page_icon="💜",
+    layout="wide"
+)
+
+
+# =========================================================
 # DATABASE
 # =========================================================
 
@@ -34,8 +45,8 @@ def create_database():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS posts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            post_type TEXT NOT NULL,
-            name TEXT NOT NULL,
+            post_type TEXT,
+            name TEXT,
             content TEXT,
             file_path TEXT,
             owner_id TEXT,
@@ -118,6 +129,7 @@ def delete_post(post_id):
     conn = get_connection()
     cursor = conn.cursor()
 
+    # Find file belonging to this post
     cursor.execute(
         "SELECT file_path FROM posts WHERE id = ?",
         (post_id,)
@@ -128,12 +140,14 @@ def delete_post(post_id):
     if result:
         file_path = result[0]
 
+        # Delete uploaded file if it exists
         if file_path and os.path.exists(file_path):
             try:
                 os.remove(file_path)
             except OSError:
                 pass
 
+        # Delete only selected post
         cursor.execute(
             "DELETE FROM posts WHERE id = ?",
             (post_id,)
@@ -151,24 +165,8 @@ create_database()
 # OWNER ID
 # =========================================================
 
-if st.button(
-    "🗑️ Delete this post",
-    key=f"delete_{post_id}",
-    use_container_width=True
-):
-    delete_post(post_id)
-    st.success("Post deleted successfully. 💜")
-    st.rerun()
-
-# =========================================================
-# PAGE CONFIG
-# =========================================================
-
-st.set_page_config(
-    page_title="ARMY Space | BTS: The Journey",
-    page_icon="💜",
-    layout="wide"
-)
+if "owner_id" not in st.session_state:
+    st.session_state.owner_id = str(uuid.uuid4())
 
 
 # =========================================================
@@ -244,13 +242,13 @@ st.markdown("""
 
 
 /* =======================================================
-   TYPING INPUT BOXES - FINAL FIX
+   TYPING INPUT BOXES
 ======================================================= */
 
 div[data-baseweb="input"] > div,
 div[data-baseweb="textarea"] > div {
     background-color: #FFFFFF !important;
-    border: 1px solid #89B78AA !important;
+    border: 1px solid #89B78A !important;
     border-radius: 10px !important;
     box-shadow: none !important;
 }
@@ -263,9 +261,7 @@ div[data-baseweb="textarea"] textarea {
     color: #000000 !important;
     -webkit-text-fill-color: #000000 !important;
     background-color: #FFFFFF !important;
-
 }
-
 
 
 /* Placeholder text */
@@ -277,13 +273,8 @@ div[data-baseweb="textarea"] textarea::placeholder {
     opacity: 1 !important;
 }
 
-/* Focus */
 
- div[data-baseweb="input"] > div:focus-within,
-div[data-baseweb="textarea"] > div:focus-within {
-    border-color: #A56CC1 !important;
-    box-shadow: 0 0 0 1px #A56CC1 !important;
-}
+/* Focus */
 
 div[data-baseweb="input"] > div:focus-within,
 div[data-baseweb="textarea"] > div:focus-within {
@@ -500,6 +491,10 @@ if posts:
         ) = post
 
 
+        # -------------------------------------------------
+        # POST CARD START
+        # -------------------------------------------------
+
         st.markdown(
             '<div class="post-card">',
             unsafe_allow_html=True
@@ -612,6 +607,10 @@ if posts:
                 )
 
 
+        # -------------------------------------------------
+        # POST CARD END
+        # -------------------------------------------------
+
         st.markdown(
             '</div>',
             unsafe_allow_html=True
@@ -619,7 +618,7 @@ if posts:
 
 
         # -------------------------------------------------
-        # DELETE MY POST
+        # DELETE SELECTED POST
         # -------------------------------------------------
 
         if owner_id == st.session_state.owner_id:
