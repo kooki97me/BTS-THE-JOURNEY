@@ -119,29 +119,27 @@ def delete_post(post_id):
     cursor = conn.cursor()
 
     cursor.execute(
-        "SELECT file_path, owner_id FROM posts WHERE id = ?",
+        "SELECT file_path FROM posts WHERE id = ?",
         (post_id,)
     )
 
     result = cursor.fetchone()
 
     if result:
-        file_path, owner_id = result
+        file_path = result[0]
 
-        if owner_id == st.session_state.owner_id:
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
 
-            if file_path and os.path.exists(file_path):
-                try:
-                    os.remove(file_path)
-                except OSError:
-                    pass
+        cursor.execute(
+            "DELETE FROM posts WHERE id = ?",
+            (post_id,)
+        )
 
-            cursor.execute(
-                "DELETE FROM posts WHERE id = ?",
-                (post_id,)
-            )
-
-            conn.commit()
+        conn.commit()
 
     conn.close()
 
@@ -153,9 +151,14 @@ create_database()
 # OWNER ID
 # =========================================================
 
-if "owner_id" not in st.session_state:
-    st.session_state.owner_id = str(uuid.uuid4())
-
+if st.button(
+    "🗑️ Delete this post",
+    key=f"delete_{post_id}",
+    use_container_width=True
+):
+    delete_post(post_id)
+    st.success("Post deleted successfully. 💜")
+    st.rerun()
 
 # =========================================================
 # PAGE CONFIG
