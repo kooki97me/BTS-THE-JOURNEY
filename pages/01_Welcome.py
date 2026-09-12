@@ -146,4 +146,4 @@ st.markdown(
 # ==================== ENTER BUTTON ====================
 
 if st.button("💜 Enter the Journey", key="enter_journey"):
-    st.switch_page("02_Home.py")
+    st.switch_page("pages/02_Home.py")
