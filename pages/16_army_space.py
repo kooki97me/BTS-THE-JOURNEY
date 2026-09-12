@@ -30,6 +30,7 @@ def create_database():
     conn = get_connection()
     cursor = conn.cursor()
 
+    # Create table if it does not exist
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS posts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,10 +38,33 @@ def create_database():
             name TEXT NOT NULL,
             content TEXT,
             file_path TEXT,
-            owner_id TEXT NOT NULL,
-            created_at TEXT NOT NULL
+            owner_id TEXT,
+            created_at TEXT
         )
     """)
+
+    # Check existing columns
+    cursor.execute("PRAGMA table_info(posts)")
+    columns = [column[1] for column in cursor.fetchall()]
+
+    # Add missing columns to older database
+    if "post_type" not in columns:
+        cursor.execute("ALTER TABLE posts ADD COLUMN post_type TEXT")
+
+    if "name" not in columns:
+        cursor.execute("ALTER TABLE posts ADD COLUMN name TEXT")
+
+    if "content" not in columns:
+        cursor.execute("ALTER TABLE posts ADD COLUMN content TEXT")
+
+    if "file_path" not in columns:
+        cursor.execute("ALTER TABLE posts ADD COLUMN file_path TEXT")
+
+    if "owner_id" not in columns:
+        cursor.execute("ALTER TABLE posts ADD COLUMN owner_id TEXT")
+
+    if "created_at" not in columns:
+        cursor.execute("ALTER TABLE posts ADD COLUMN created_at TEXT")
 
     conn.commit()
     conn.close()
