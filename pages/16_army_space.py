@@ -1,9 +1,21 @@
 import streamlit as st
 import sqlite3
 import os
-import re
-import html
+import uuid
 from datetime import datetime
+
+
+# =========================================================
+# PATHS
+# =========================================================
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_DIR = os.path.dirname(BASE_DIR)
+
+DATABASE_FILE = os.path.join(PROJECT_DIR, "army_space.db")
+UPLOAD_FOLDER = os.path.join(PROJECT_DIR, "army_uploads")
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
 # =========================================================
@@ -18,745 +30,720 @@ st.set_page_config(
 
 
 # =========================================================
-# PATHS
-# =========================================================
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_DIR = os.path.dirname(BASE_DIR)
-
-DB_PATH = os.path.join(PROJECT_DIR, "army_space.db")
-UPLOAD_DIR = os.path.join(PROJECT_DIR, "army_uploads")
-
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-
-# =========================================================
-# USER ID
-# =========================================================
-# Simple local identity.
-# Browser/session ke liye unique ID banega.
-
-if "army_user_id" not in st.session_state:
-    import uuid
-    st.session_state.army_user_id = str(uuid.uuid4())
-
-USER_ID = st.session_state.army_user_id
-
-
-# =========================================================
 # DATABASE
 # =========================================================
 
 def get_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    return sqlite3.connect(DATABASE_FILE)
 
 
-def initialize_database():
-
+def create_database():
     conn = get_connection()
+    cursor = conn.cursor()
 
-    conn.execute("""
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS posts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT NOT NULL,
-            display_name TEXT NOT NULL,
-            post_type TEXT NOT NULL,
+            post_type TEXT,
+            name TEXT,
             content TEXT,
             file_path TEXT,
-            created_at TEXT NOT NULL
+            owner_id TEXT,
+            created_at TEXT
         )
     """)
 
+    cursor.execute("PRAGMA table_info(posts)")
+    columns = [column[1] for column in cursor.fetchall()]
+
+    if "post_type" not in columns:
+        cursor.execute("ALTER TABLE posts ADD COLUMN post_type TEXT")
+
+    if "name" not in columns:
+        cursor.execute("ALTER TABLE posts ADD COLUMN name TEXT")
+
+    if "content" not in columns:
+        cursor.execute("ALTER TABLE posts ADD COLUMN content TEXT")
+
+    if "file_path" not in columns:
+        cursor.execute("ALTER TABLE posts ADD COLUMN file_path TEXT")
+
+    if "owner_id" not in columns:
+        cursor.execute("ALTER TABLE posts ADD COLUMN owner_id TEXT")
+
+    if "created_at" not in columns:
+        cursor.execute("ALTER TABLE posts ADD COLUMN created_at TEXT")
+
     conn.commit()
     conn.close()
 
 
-initialize_database()
-
-
-# =========================================================
-# BASIC CONTENT FILTER
-# =========================================================
-
-BLOCKED_WORDS = {
-    "fuck",
-    "fucking",
-    "shit",
-    "bitch",
-    "asshole",
-    "bastard",
-    "idiot",
-    "stupid",
-    "moron",
-    "dumbass",
-    "slut",
-    "whore"
-}
-
-
-def contains_bad_language(text):
-
-    if not text:
-        return False
-
-    text_lower = text.lower()
-
-    for word in BLOCKED_WORDS:
-
-        pattern = r"\b" + re.escape(word) + r"\b"
-
-        if re.search(pattern, text_lower):
-            return True
-
-    return False
-
-
-# =========================================================
-# PERSONAL CONTACT FILTER
-# =========================================================
-
-def contains_contact_info(text):
-
-    if not text:
-        return False
-
-    # Email
-    email_pattern = (
-        r"\b[A-Za-z0-9._%+-]+"
-        r"@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"
-    )
-
-    # Phone numbers
-    phone_pattern = (
-        r"(?<!\d)"
-        r"(?:\+?\d[\d\s().-]{8,}\d)"
-        r"(?!\d)"
-    )
-
-    if re.search(email_pattern, text):
-        return True
-
-    if re.search(phone_pattern, text):
-        return True
-
-    return False
-
-
-# =========================================================
-# FILE TYPES
-# =========================================================
-
-IMAGE_TYPES = [
-    "jpg",
-    "jpeg",
-    "png",
-    "webp"
-]
-
-VIDEO_TYPES = [
-    "mp4",
-    "mov",
-    "webm"
-]
-
-MAX_FILE_SIZE = 50 * 1024 * 1024
-
-
-# =========================================================
-# ADD POST
-# =========================================================
-
-def add_post(
-    display_name,
-    post_type,
-    content,
-    uploaded_file=None
-):
-
-    content = (content or "").strip()
-
-    # -----------------------------------------------------
-    # EMPTY POST
-    # -----------------------------------------------------
-
-    if not content and uploaded_file is None:
-
-        return False, "Please write something or select a file."
-
-    # -----------------------------------------------------
-    # BAD LANGUAGE
-    # -----------------------------------------------------
-
-    if contains_bad_language(content):
-
-        return (
-            False,
-            "Please keep the ARMY Space respectful and friendly. 💜"
-        )
-
-    # -----------------------------------------------------
-    # CONTACT INFO
-    # -----------------------------------------------------
-
-    if contains_contact_info(content):
-
-        return (
-            False,
-            "Please don't share phone numbers or email addresses here."
-        )
-
-    file_path = None
-
-    # -----------------------------------------------------
-    # FILE
-    # -----------------------------------------------------
-
-    if uploaded_file is not None:
-
-        if uploaded_file.size > MAX_FILE_SIZE:
-
-            return (
-                False,
-                "File size must be 50 MB or smaller."
-            )
-
-        extension = (
-            uploaded_file.name
-            .split(".")[-1]
-            .lower()
-        )
-
-        if post_type == "photo":
-
-            if extension not in IMAGE_TYPES:
-
-                return (
-                    False,
-                    "Please upload JPG, JPEG, PNG or WEBP."
-                )
-
-        if post_type == "video":
-
-            if extension not in VIDEO_TYPES:
-
-                return (
-                    False,
-                    "Please upload MP4, MOV or WEBM."
-                )
-
-        timestamp = datetime.now().strftime(
-            "%Y%m%d_%H%M%S_%f"
-        )
-
-        filename = (
-            f"{USER_ID}_{timestamp}.{extension}"
-        )
-
-        file_path = os.path.join(
-            UPLOAD_DIR,
-            filename
-        )
-
-        with open(file_path, "wb") as f:
-
-            f.write(
-                uploaded_file.getbuffer()
-            )
-
-    # -----------------------------------------------------
-    # DATABASE
-    # -----------------------------------------------------
-
+def add_post(post_type, name, content="", file_path=None):
     conn = get_connection()
+    cursor = conn.cursor()
 
-    conn.execute(
-        """
+    cursor.execute("""
         INSERT INTO posts
-        (
-            user_id,
-            display_name,
-            post_type,
-            content,
-            file_path,
-            created_at
-        )
+        (post_type, name, content, file_path, owner_id, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (
-            USER_ID,
-            display_name.strip() or "ARMY",
-            post_type,
-            content,
-            file_path,
-            datetime.now().strftime(
-                "%d %b %Y, %I:%M %p"
-            )
-        )
-    )
+    """, (
+        post_type,
+        name,
+        content,
+        file_path,
+        st.session_state.owner_id,
+        datetime.now().strftime("%d %b %Y, %I:%M %p")
+    ))
 
     conn.commit()
     conn.close()
 
-    return True, "Posted successfully! 💜"
-
-
-# =========================================================
-# GET POSTS
-# =========================================================
 
 def get_posts():
-
     conn = get_connection()
+    cursor = conn.cursor()
 
-    posts = conn.execute(
-        """
-        SELECT *
+    cursor.execute("""
+        SELECT
+            id,
+            post_type,
+            name,
+            content,
+            file_path,
+            owner_id,
+            created_at
         FROM posts
         ORDER BY id DESC
-        """
-    ).fetchall()
+    """)
 
+    posts = cursor.fetchall()
     conn.close()
 
     return posts
 
 
-# =========================================================
-# DELETE POST
-# =========================================================
-
 def delete_post(post_id):
-
     conn = get_connection()
+    cursor = conn.cursor()
 
-    post = conn.execute(
-        """
-        SELECT *
-        FROM posts
-        WHERE id = ?
-        """,
-        (post_id,)
-    ).fetchone()
-
-    if post is None:
-
-        conn.close()
-
-        return False, "Post not found."
-
-    # -----------------------------------------------------
-    # IMPORTANT:
-    # ONLY OWNER CAN DELETE
-    # -----------------------------------------------------
-
-    if post["user_id"] != USER_ID:
-
-        conn.close()
-
-        return (
-            False,
-            "You can delete only your own post."
-        )
-
-    # -----------------------------------------------------
-    # DELETE FILE
-    # -----------------------------------------------------
-
-    file_path = post["file_path"]
-
-    if file_path:
-
-        try:
-
-            if os.path.exists(file_path):
-                os.remove(file_path)
-
-        except Exception:
-            pass
-
-    # -----------------------------------------------------
-    # DELETE DATABASE RECORD
-    # -----------------------------------------------------
-
-    conn.execute(
-        """
-        DELETE FROM posts
-        WHERE id = ?
-        """,
+    cursor.execute(
+        "SELECT file_path FROM posts WHERE id = ?",
         (post_id,)
     )
 
-    conn.commit()
+    result = cursor.fetchone()
+
+    if result:
+        file_path = result[0]
+
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+
+        cursor.execute(
+            "DELETE FROM posts WHERE id = ?",
+            (post_id,)
+        )
+
+        conn.commit()
+
     conn.close()
 
-    return True, "Post deleted."
+
+create_database()
+
+
+# =========================================================
+# OWNER ID
+# =========================================================
+
+if "owner_id" not in st.session_state:
+    st.session_state.owner_id = str(uuid.uuid4())
 
 
 # =========================================================
 # CSS
 # =========================================================
 
-st.markdown(
-    """
-    <style>
+st.markdown("""
+<style>
 
-    .stApp {
-        background:
-        linear-gradient(
-            135deg,
-            #12071f 0%,
-            #1c0c30 50%,
-            #281348 100%
-        );
-        color: #F5EEFF;
-    }
+.stApp {
+    background: linear-gradient(
+        135deg,
+        #160021 0%,
+        #241035 50%,
+        #100017 100%
+    );
+    color: #F5EFFF;
+}
 
-    .army-title {
-        text-align: center;
-        font-size: 46px;
-        font-weight: 800;
-        color: #E8D5FF;
-        margin-top: 10px;
-        margin-bottom: 5px;
-    }
+.main-title {
+    text-align: center;
+    color: #E8C7FF;
+    font-size: 46px;
+    font-weight: 800;
+    margin-top: 10px;
+    margin-bottom: 5px;
+}
 
-    .army-subtitle {
-        text-align: center;
-        color: #CDB8E8;
-        font-size: 18px;
-        margin-bottom: 35px;
-    }
+.subtitle {
+    text-align: center;
+    color: #CDB9DA;
+    font-size: 18px;
+    margin-bottom: 30px;
+}
 
-    .section-title {
-        color: #E5CCFF;
-        font-size: 28px;
-        font-weight: 700;
-        margin-top: 25px;
-        margin-bottom: 15px;
-    }
+.section-title {
+    color: #E8C7FF;
+    font-size: 28px;
+    font-weight: 700;
+    margin-top: 15px;
+    margin-bottom: 12px;
+}
 
-    .post-card {
-        padding: 20px;
-        border-radius: 18px;
-        background: rgba(255,255,255,0.055);
-        border: 1px solid rgba(210,170,255,0.20);
-        margin-top: 10px;
-        margin-bottom: 5px;
-    }
+.info-box {
+    background: rgba(95, 54, 120, 0.20);
+    border: 1px solid rgba(190, 145, 220, 0.25);
+    border-radius: 16px;
+    padding: 16px 24px;
+    color: #F2E8F7;
+    max-width: 850px;
+    margin: 0 auto;
+    text-align: center;
+}
 
-    .post-name {
-        color: #E9D7FF;
-        font-size: 18px;
-        font-weight: 700;
-    }
+div[data-baseweb="input"] > div,
+div[data-baseweb="textarea"] > div {
+    background-color: #FFFFFF !important;
+    border: 1px solid #89B78A !important;
+    border-radius: 10px !important;
+    box-shadow: none !important;
+}
 
-    .post-date {
-        color: #9F88B8;
-        font-size: 12px;
-        margin-top: 3px;
-    }
+div[data-baseweb="input"] input,
+div[data-baseweb="textarea"] textarea {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    background-color: #FFFFFF !important;
+}
 
-    .post-text {
-        color: #F4EDFA;
-        font-size: 16px;
-        line-height: 1.6;
-        margin-top: 13px;
-        white-space: pre-wrap;
-    }
+div[data-baseweb="input"] input::placeholder,
+div[data-baseweb="textarea"] textarea::placeholder {
+    color: #D8C7E8 !important;
+    -webkit-text-fill-color: #D8C7E8 !important;
+    opacity: 1 !important;
+}
 
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+div[data-baseweb="input"] > div:focus-within,
+div[data-baseweb="textarea"] > div:focus-within {
+    border-color: #A56CC1 !important;
+    box-shadow: 0 0 0 1px #A56CC1 !important;
+}
+
+label,
+.stTextInput label,
+.stTextArea label,
+.stFileUploader label {
+    color: #E8D9EF !important;
+}
+
+section[data-testid="stFileUploaderDropzone"] {
+    background-color: #2B1640 !important;
+    border: 1px dashed #79528E !important;
+    border-radius: 12px !important;
+}
+
+.stButton > button {
+    background-color: #5B3275 !important;
+    color: #FFFFFF !important;
+    border: 1px solid #80549A !important;
+    border-radius: 10px !important;
+    font-weight: 600 !important;
+    transition: 0.2s ease;
+}
+
+.stButton > button:hover {
+    background-color: #70418D !important;
+    border-color: #A56CC1 !important;
+    color: #FFFFFF !important;
+}
+
+.post-card {
+    background: rgba(255, 255, 255, 0.055);
+    border: 1px solid rgba(205, 170, 225, 0.14);
+    border-radius: 16px;
+    padding: 18px;
+    margin-top: 10px;
+    margin-bottom: 5px;
+}
+
+.post-name {
+    color: #E7C5FF;
+    font-size: 19px;
+    font-weight: 700;
+}
+
+.post-time {
+    color: #AFA0B9;
+    font-size: 13px;
+    margin-top: 2px;
+}
+
+.post-content {
+    color: #F2EAF5;
+    font-size: 16px;
+    line-height: 1.6;
+    margin-top: 10px;
+}
+
+hr {
+    border-color: rgba(205, 170, 225, 0.15) !important;
+}
+
+div[data-testid="stAlert"] {
+    background-color: rgba(65, 35, 85, 0.55) !important;
+    color: #F1E6F7 !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 
 # =========================================================
-# HEADER
+# TITLE
 # =========================================================
 
 st.markdown(
-    '<div class="army-title">💜 ARMY SPACE</div>',
+    '<div class="main-title">💜 ARMY SPACE</div>',
     unsafe_allow_html=True
 )
 
 st.markdown(
-    '<div class="army-subtitle">'
-    'A little space for ARMYs to share their thoughts, '
-    'memories and love for BTS.'
+    '<div class="subtitle">'
+    'A little corner for ARMYs to share memories, thoughts and love for BTS.'
     '</div>',
     unsafe_allow_html=True
 )
 
 
 # =========================================================
-# HOME BUTTON
+# ARMY SPACE RULES
 # =========================================================
 
-if st.button(
-    "🏠 Back to Home",
-    use_container_width=True
-):
+st.markdown("""
+<div class="info-box">
 
-    st.switch_page(
-        "pages/02_Home.py"
-    )
+💜 <b>ARMY Space Rules</b>
+
+<br><br>
+
+Be kind and respectful to other ARMYs.<br>
+No hate, bullying or personal information.<br>
+Share only things you are comfortable making public.
+
+</div>
+""", unsafe_allow_html=True)
+
+st.write("")
 
 
 # =========================================================
-# CREATE POST
+# MESSAGE WALL
 # =========================================================
 
 st.markdown(
-    '<div class="section-title">💬 Share with ARMY</div>',
+    '<div class="section-title">💬 ARMY Message Wall</div>',
     unsafe_allow_html=True
 )
 
-
-display_name = st.text_input(
+name = st.text_input(
     "Your ARMY name",
-    placeholder="Enter the name you want to show"
+    placeholder="Example: PurpleMoon"
 )
 
-
-post_type = st.selectbox(
-    "What do you want to share?",
-    [
-        "message",
-        "why_bts",
-        "photo",
-        "video"
-    ]
-)
-
-
-# ---------------------------------------------------------
-# PLACEHOLDER
-# ---------------------------------------------------------
-
-if post_type == "message":
-
-    placeholder = (
-        "Write something you'd like to share with ARMY..."
-    )
-
-elif post_type == "why_bts":
-
-    placeholder = (
-        "Why is BTS special to you?"
-    )
-
-elif post_type == "photo":
-
-    placeholder = (
-        "Write a caption for your photo..."
-    )
-
-else:
-
-    placeholder = (
-        "Write a caption for your video..."
-    )
-
-
-content = st.text_area(
+message = st.text_area(
     "Your message",
-    placeholder=placeholder,
-    height=130
+    placeholder="Write something you want to share with ARMY..."
 )
 
-
-# =========================================================
-# FILE UPLOAD
-# =========================================================
-
-uploaded_file = None
-
-if post_type == "photo":
-
-    uploaded_file = st.file_uploader(
-        "Choose a photo",
-        type=IMAGE_TYPES
-    )
-
-elif post_type == "video":
-
-    uploaded_file = st.file_uploader(
-        "Choose a video",
-        type=VIDEO_TYPES
-    )
-
-
-# =========================================================
-# POST BUTTON
-# =========================================================
 
 if st.button(
-    "💜 Post",
-    type="primary",
+    "💜 Post Message",
     use_container_width=True
 ):
 
-    if not display_name.strip():
+    if not name.strip():
+        st.warning("Please enter your ARMY name.")
 
-        st.warning(
-            "Please enter your ARMY name first."
-        )
+    elif not message.strip():
+        st.warning("Please write a message.")
 
     else:
-
-        success, message = add_post(
-            display_name,
-            post_type,
-            content,
-            uploaded_file
+        add_post(
+            post_type="message",
+            name=name.strip(),
+            content=message.strip()
         )
 
-        if success:
-
-            st.success(message)
-            st.rerun()
-
-        else:
-
-            st.error(message)
+        st.success("Your message has been posted! 💜")
+        st.rerun()
 
 
 # =========================================================
 # POSTS
 # =========================================================
 
+st.write("")
+st.markdown("---")
+
 st.markdown(
     '<div class="section-title">💜 ARMY Posts</div>',
     unsafe_allow_html=True
 )
 
-
 posts = get_posts()
 
 
-if not posts:
+if posts:
+
+    for post in posts:
+
+        (
+            post_id,
+            post_type,
+            post_name,
+            content,
+            file_path,
+            owner_id,
+            created_at
+        ) = post
+
+
+        # -------------------------------------------------
+        # POST CARD
+        # -------------------------------------------------
+
+        st.markdown(
+            '<div class="post-card">',
+            unsafe_allow_html=True
+        )
+
+
+        # -------------------------------------------------
+        # MESSAGE
+        # -------------------------------------------------
+
+        if post_type == "message":
+
+            st.markdown(
+                f'<div class="post-name">💜 {post_name}</div>',
+                unsafe_allow_html=True
+            )
+
+            st.markdown(
+                f'<div class="post-time">{created_at}</div>',
+                unsafe_allow_html=True
+            )
+
+            st.markdown(
+                f'<div class="post-content">{content}</div>',
+                unsafe_allow_html=True
+            )
+
+
+        # -------------------------------------------------
+        # WHY BTS
+        # -------------------------------------------------
+
+        elif post_type == "why_bts":
+
+            st.markdown(
+                f'<div class="post-name">💜 {post_name}</div>',
+                unsafe_allow_html=True
+            )
+
+            st.markdown(
+                f'<div class="post-time">{created_at}</div>',
+                unsafe_allow_html=True
+            )
+
+            st.markdown(
+                f'<div class="post-content">'
+                f'✨ <b>Why BTS is special to me:</b><br><br>'
+                f'{content}'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+
+
+        # -------------------------------------------------
+        # PHOTO
+        # -------------------------------------------------
+
+        elif post_type == "photo":
+
+            st.markdown(
+                f'<div class="post-name">📸 {post_name}</div>',
+                unsafe_allow_html=True
+            )
+
+            st.markdown(
+                f'<div class="post-time">{created_at}</div>',
+                unsafe_allow_html=True
+            )
+
+            if file_path and os.path.exists(file_path):
+
+                st.image(
+                    file_path,
+                    use_container_width=True
+                )
+
+            if content:
+
+                st.markdown(
+                    f'<div class="post-content">{content}</div>',
+                    unsafe_allow_html=True
+                )
+
+
+        # -------------------------------------------------
+        # VIDEO
+        # -------------------------------------------------
+
+        elif post_type == "video":
+
+            st.markdown(
+                f'<div class="post-name">🎥 {post_name}</div>',
+                unsafe_allow_html=True
+            )
+
+            st.markdown(
+                f'<div class="post-time">{created_at}</div>',
+                unsafe_allow_html=True
+            )
+
+            if file_path and os.path.exists(file_path):
+
+                st.video(file_path)
+
+            if content:
+
+                st.markdown(
+                    f'<div class="post-content">{content}</div>',
+                    unsafe_allow_html=True
+                )
+
+
+        # -------------------------------------------------
+        # CLOSE POST CARD
+        # -------------------------------------------------
+
+        st.markdown(
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+
+        # -------------------------------------------------
+        # DELETE BUTTON
+        # -------------------------------------------------
+
+        if st.button(
+            "🗑️ Delete this post",
+            key=f"delete_{post_id}",
+            use_container_width=True
+        ):
+
+            delete_post(post_id)
+
+            st.success("Post deleted successfully. 💜")
+
+            st.rerun()
+
+
+else:
 
     st.info(
         "No posts yet. Be the first ARMY to share something! 💜"
     )
 
 
-for post in posts:
+# =========================================================
+# SHARE PHOTO / VIDEO
+# =========================================================
 
-    post_id = post["id"]
+st.write("")
+st.markdown("---")
 
-    # Escape user-generated text before displaying
-    name = html.escape(
-        post["display_name"] or "ARMY"
-    )
+st.markdown(
+    '<div class="section-title">📸 Share a BTS Memory</div>',
+    unsafe_allow_html=True
+)
 
-    content_text = html.escape(
-        post["content"] or ""
-    )
+media_name = st.text_input(
+    "Your ARMY name",
+    key="media_name",
+    placeholder="Example: PurpleMoon"
+)
 
-    created_at = html.escape(
-        post["created_at"] or ""
-    )
+uploaded_file = st.file_uploader(
+    "Choose a photo or video",
+    type=[
+        "jpg",
+        "jpeg",
+        "png",
+        "webp",
+        "mp4",
+        "mov",
+        "avi"
+    ]
+)
 
-    # -----------------------------------------------------
-    # POST CARD
-    # -----------------------------------------------------
+caption = st.text_input(
+    "Caption (optional)",
+    key="caption",
+    placeholder="Add a small caption..."
+)
 
-    st.markdown(
-        f"""
-        <div class="post-card">
 
-            <div class="post-name">
-                💜 {name}
-            </div>
+if st.button(
+    "💜 Share Memory",
+    use_container_width=True
+):
 
-            <div class="post-date">
-                {created_at}
-            </div>
+    if not media_name.strip():
 
-            <div class="post-text">
-                {content_text}
-            </div>
+        st.warning("Please enter your ARMY name.")
 
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    elif uploaded_file is None:
 
-    # -----------------------------------------------------
-    # PHOTO
-    # -----------------------------------------------------
+        st.warning("Please choose a photo or video.")
 
-    if (
-        post["post_type"] == "photo"
-        and post["file_path"]
-        and os.path.exists(post["file_path"])
-    ):
+    else:
 
-        st.image(
-            post["file_path"],
-            use_container_width=True
+        extension = os.path.splitext(
+            uploaded_file.name
+        )[1].lower()
+
+        unique_filename = (
+            str(uuid.uuid4()) + extension
         )
 
-    # -----------------------------------------------------
-    # VIDEO
-    # -----------------------------------------------------
-
-    if (
-        post["post_type"] == "video"
-        and post["file_path"]
-        and os.path.exists(post["file_path"])
-    ):
-
-        st.video(
-            post["file_path"]
+        saved_path = os.path.join(
+            UPLOAD_FOLDER,
+            unique_filename
         )
 
-    # -----------------------------------------------------
-    # DELETE BUTTON
-    # -----------------------------------------------------
-    # Button sab posts par dikhega,
-    # but server-side check ensure karega ki
-    # sirf owner ka post delete ho.
+        with open(saved_path, "wb") as file:
 
-    if st.button(
-        "🗑️ Delete",
-        key=f"delete_{post_id}",
-        use_container_width=True
-    ):
+            file.write(
+                uploaded_file.getbuffer()
+            )
 
-        success, message = delete_post(
-            post_id
-        )
 
-        if success:
+        if uploaded_file.type.startswith("video"):
 
-            st.success(message)
-            st.rerun()
+            post_type = "video"
 
         else:
 
-            st.error(message)
+            post_type = "photo"
 
-    st.divider()
+
+        add_post(
+            post_type=post_type,
+            name=media_name.strip(),
+            content=caption.strip(),
+            file_path=saved_path
+        )
+
+        st.success("Your memory has been shared! 💜")
+        st.rerun()
 
 
 # =========================================================
-# FOOTER
+# WHY BTS?
 # =========================================================
+
+st.write("")
+st.markdown("---")
 
 st.markdown(
-    """
-    <p style="
-        text-align:center;
-        color:#9F88B8;
-        font-size:13px;
-        margin-top:30px;
-    ">
-        BTS: The Journey 💜 • ARMY Space
-    </p>
-    """,
+    '<div class="section-title">💜 Why BTS?</div>',
     unsafe_allow_html=True
 )
+
+why_name = st.text_input(
+    "Your ARMY name",
+    key="why_name",
+    placeholder="Example: PurpleMoon"
+)
+
+why_bts = st.text_area(
+    "Tell us what BTS means to you",
+    key="why_bts",
+    placeholder="Write your story..."
+)
+
+
+if st.button(
+    "💜 Share My Story",
+    use_container_width=True
+):
+
+    if not why_name.strip():
+
+        st.warning("Please enter your ARMY name.")
+
+    elif not why_bts.strip():
+
+        st.warning("Please write your story.")
+
+    else:
+
+        add_post(
+            post_type="why_bts",
+            name=why_name.strip(),
+            content=why_bts.strip()
+        )
+
+        st.success("Your story has been shared! 💜")
+        st.rerun()
+
+
+# =========================================================
+# NAVIGATION
+# =========================================================
+
+st.write("")
+st.markdown("---")
+
+col1, col2 = st.columns(2)
+
+
+with col1:
+
+    if st.button(
+        "← Back to Unknown Stories",
+        use_container_width=True
+    ):
+
+        st.switch_page(
+            "pages/15_stories.py"
+        )
+
+
+with col2:
+
+    if st.button(
+        "🏠 Back to Home",
+        use_container_width=True
+    ):
+
+        st.switch_page(
+            "pages/02_Home.py"
+        )
