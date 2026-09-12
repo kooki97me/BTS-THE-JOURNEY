@@ -41,7 +41,6 @@ def create_database():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Create table if it does not exist
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS posts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,11 +53,9 @@ def create_database():
         )
     """)
 
-    # Check existing columns
     cursor.execute("PRAGMA table_info(posts)")
     columns = [column[1] for column in cursor.fetchall()]
 
-    # Add missing columns to older database
     if "post_type" not in columns:
         cursor.execute("ALTER TABLE posts ADD COLUMN post_type TEXT")
 
@@ -129,7 +126,6 @@ def delete_post(post_id):
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Find file belonging to this post
     cursor.execute(
         "SELECT file_path FROM posts WHERE id = ?",
         (post_id,)
@@ -140,14 +136,12 @@ def delete_post(post_id):
     if result:
         file_path = result[0]
 
-        # Delete uploaded file if it exists
         if file_path and os.path.exists(file_path):
             try:
                 os.remove(file_path)
             except OSError:
                 pass
 
-        # Delete only selected post
         cursor.execute(
             "DELETE FROM posts WHERE id = ?",
             (post_id,)
@@ -176,10 +170,6 @@ if "owner_id" not in st.session_state:
 st.markdown("""
 <style>
 
-/* =======================================================
-   MAIN PAGE
-======================================================= */
-
 .stApp {
     background: linear-gradient(
         135deg,
@@ -189,11 +179,6 @@ st.markdown("""
     );
     color: #F5EFFF;
 }
-
-
-/* =======================================================
-   TITLE
-======================================================= */
 
 .main-title {
     text-align: center;
@@ -211,11 +196,6 @@ st.markdown("""
     margin-bottom: 30px;
 }
 
-
-/* =======================================================
-   SECTION TITLES
-======================================================= */
-
 .section-title {
     color: #E8C7FF;
     font-size: 28px;
@@ -223,11 +203,6 @@ st.markdown("""
     margin-top: 15px;
     margin-bottom: 12px;
 }
-
-
-/* =======================================================
-   ARMY SPACE RULES
-======================================================= */
 
 .info-box {
     background: rgba(95, 54, 120, 0.20);
@@ -240,11 +215,6 @@ st.markdown("""
     text-align: center;
 }
 
-
-/* =======================================================
-   TYPING INPUT BOXES
-======================================================= */
-
 div[data-baseweb="input"] > div,
 div[data-baseweb="textarea"] > div {
     background-color: #FFFFFF !important;
@@ -253,18 +223,12 @@ div[data-baseweb="textarea"] > div {
     box-shadow: none !important;
 }
 
-
-/* Text typed by ARMY */
-
 div[data-baseweb="input"] input,
 div[data-baseweb="textarea"] textarea {
     color: #000000 !important;
     -webkit-text-fill-color: #000000 !important;
     background-color: #FFFFFF !important;
 }
-
-
-/* Placeholder text */
 
 div[data-baseweb="input"] input::placeholder,
 div[data-baseweb="textarea"] textarea::placeholder {
@@ -273,19 +237,11 @@ div[data-baseweb="textarea"] textarea::placeholder {
     opacity: 1 !important;
 }
 
-
-/* Focus */
-
 div[data-baseweb="input"] > div:focus-within,
 div[data-baseweb="textarea"] > div:focus-within {
     border-color: #A56CC1 !important;
     box-shadow: 0 0 0 1px #A56CC1 !important;
 }
-
-
-/* =======================================================
-   LABELS
-======================================================= */
 
 label,
 .stTextInput label,
@@ -294,21 +250,11 @@ label,
     color: #E8D9EF !important;
 }
 
-
-/* =======================================================
-   FILE UPLOADER
-======================================================= */
-
 section[data-testid="stFileUploaderDropzone"] {
     background-color: #2B1640 !important;
     border: 1px dashed #79528E !important;
     border-radius: 12px !important;
 }
-
-
-/* =======================================================
-   BUTTONS
-======================================================= */
 
 .stButton > button {
     background-color: #5B3275 !important;
@@ -324,11 +270,6 @@ section[data-testid="stFileUploaderDropzone"] {
     border-color: #A56CC1 !important;
     color: #FFFFFF !important;
 }
-
-
-/* =======================================================
-   POST CARD
-======================================================= */
 
 .post-card {
     background: rgba(255, 255, 255, 0.055);
@@ -358,19 +299,9 @@ section[data-testid="stFileUploaderDropzone"] {
     margin-top: 10px;
 }
 
-
-/* =======================================================
-   DIVIDER
-======================================================= */
-
 hr {
     border-color: rgba(205, 170, 225, 0.15) !important;
 }
-
-
-/* =======================================================
-   ALERTS
-======================================================= */
 
 div[data-testid="stAlert"] {
     background-color: rgba(65, 35, 85, 0.55) !important;
@@ -492,7 +423,7 @@ if posts:
 
 
         # -------------------------------------------------
-        # POST CARD START
+        # POST CARD
         # -------------------------------------------------
 
         st.markdown(
@@ -608,7 +539,7 @@ if posts:
 
 
         # -------------------------------------------------
-        # POST CARD END
+        # CLOSE POST CARD
         # -------------------------------------------------
 
         st.markdown(
@@ -618,21 +549,20 @@ if posts:
 
 
         # -------------------------------------------------
-        # DELETE SELECTED POST
+        # DELETE BUTTON
         # -------------------------------------------------
 
-        if owner_id == st.session_state.owner_id:
+        if st.button(
+            "🗑️ Delete this post",
+            key=f"delete_{post_id}",
+            use_container_width=True
+        ):
 
-            if st.button(
-                "🗑️ Delete my post",
-                key=f"delete_{post_id}",
-                use_container_width=True
-            ):
+            delete_post(post_id)
 
-                delete_post(post_id)
+            st.success("Post deleted successfully. 💜")
 
-                st.success("Your post has been deleted. 💜")
-                st.rerun()
+            st.rerun()
 
 
 else:
