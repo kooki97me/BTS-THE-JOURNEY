@@ -357,6 +357,15 @@ with col6:
         use_container_width=True
     ):
         st.switch_page("pages/16_army_space.py")
+# ---------------------------------------------------------
+# ABOUT THE CREATOR
+# ---------------------------------------------------------
+
+st.markdown("### 💜 About the Creator")
+
+if st.button("About the Creator"):
+    st.switch_page("pages/17_about_creator.py")
+
 
 # ---------------------------------------------------------
 # JOURNEY MESSAGE
