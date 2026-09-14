@@ -255,7 +255,14 @@ with declaration_box:
         "third-party materials belong to their respective owners."
     )
 
+st.markdown("### 💜 Connect with the Creator")
 
+st.write("Have feedback or suggestions about BTS: The Journey?")
+
+st.link_button(
+    "Instagram",
+    "https://www.instagram.com/thakurkooki/"
+)
 # --------------------------------------------------
 # FOOTER
 # --------------------------------------------------
