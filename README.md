@@ -1,34 +1,31 @@
-# 💜 BTS: The Journey
+# BTS: The Journey
 
-**BTS: The Journey** is an interactive web application built with Python and Streamlit for exploring the journey of BTS and discovering information about its seven members.
+BTS: The Journey is an interactive web application developed using Python and Streamlit. 
+The project is designed for BTS fans to explore information about the seven members, 
+music, achievements, timeline, stories, and an ARMY Space.
 
-The website brings together BTS members, music, achievements, timeline, stories, and an ARMY Space in one interactive platform with a purple/lavender BTS-inspired design.
+## Project Overview
 
----
+The main idea behind this project is to bring different aspects of BTS's journey 
+together in one interactive website.
 
-## 🌟 Project Overview
+The application provides separate sections for BTS members, music and albums, 
+achievements, timeline, unknown stories, and ARMY Space.
 
-BTS: The Journey is designed as an interactive fan-oriented website for both new and existing ARMYs.
+## Features
 
-The project provides different sections to explore BTS, including member information, music, achievements, important moments, interesting stories, and a community-style ARMY Space where users can share messages and media.
+### Welcome Page
+- Introduction to BTS: The Journey
+- Simple BTS-inspired purple and lavender interface
+- Navigation to the main website
 
----
+### Home
+- Main navigation page
+- Quick access to different sections of the website
+- Interactive navigation buttons
 
-## ✨ Features
-
-### 💜 Welcome Page
-- Introduction to **BTS: The Journey**
-- BTS-inspired purple/lavender interface
-- Entry point to explore the website
-
-### 🏠 Home
-- Central navigation hub
-- Quick access to different sections
-- Interactive exploration buttons
-
-### 👤 Meet the Members
-Information pages for all seven BTS members:
-
+### Members
+Information about all seven BTS members:
 - RM
 - Jin
 - SUGA
@@ -37,52 +34,47 @@ Information pages for all seven BTS members:
 - V
 - Jungkook
 
-Each member has a dedicated page with personal and BTS-related information.
+Each member has a separate page with information about them.
 
-### 🎵 Music & Albums
-- Explore BTS music and albums
-- Organized music-related information
-- Easy navigation through the music section
+### Music and Albums
+- BTS music and album information
+- Organized music section
+- Easy navigation
 
-### 🏆 Achievements
-- Explore major BTS achievements
-- Highlights important milestones from their career
+### Achievements
+- Major BTS achievements
+- Important milestones from their career
 
-### 📅 Timeline
-- Explore BTS's journey chronologically
-- Important events and milestones from their career
+### Timeline
+- Chronological view of important events
+- Major milestones from BTS's journey
 
-### 📖 Unknown Stories
+### Unknown Stories
 - Interesting BTS-related stories and facts
-- Created especially for fans who want to discover more about their journey
+- Content for fans who want to explore more about BTS
 
-### 💬 ARMY Space
-A community-style section where users can:
+### ARMY Space
+ARMY Space is a community-style section where users can:
 - Post messages
 - Share images
 - Share videos
 - Delete their own posts
-- Receive basic filtering for inappropriate language and contact information
+- Filter inappropriate language and contact information
 
-Posts are stored using SQLite.
+The posts are stored using SQLite.
 
----
+## Technologies Used
 
-## 🛠️ Technologies Used
+- Python
+- Streamlit
+- HTML
+- CSS
+- SQLite
+- Pillow (PIL)
+- GitHub
+- Streamlit Community Cloud
 
-| Technology | Purpose |
-|------------|---------|
-| **Python** | Main programming language |
-| **Streamlit** | Web application development |
-| **HTML & CSS** | UI customization and styling |
-| **SQLite** | Storing ARMY Space posts |
-| **Pillow (PIL)** | Image processing |
-| **GitHub** | Source code management |
-| **Streamlit Community Cloud** | Web application deployment |
-
----
-
-## 📁 Project Structure
+## Project Structure
 
 ```text
 BTS_THE_JOURNEY/
